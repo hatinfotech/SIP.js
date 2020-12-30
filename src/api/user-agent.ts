@@ -121,7 +121,7 @@ export class UserAgent {
         // random Test-Net IP (http://tools.ietf.org/html/rfc5735)
         this.options.viaHost = "192.0.2." + octet;
       } else if (this.options.hackIpInContact) {
-        this.options.viaHost = this.options.hackIpInContact;
+        this.options.viaHost = this.options.hackIpInContact as string;
       }
     }
 

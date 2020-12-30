@@ -54,7 +54,7 @@ export interface SimpleUserDelegate {
    * Callback for handling incoming MESSAGE requests.
    * @param message - The message received.
    */
-  onMessageReceived?(message: string): void;
+  onMessageReceived?(message?: string): void;
 
   /**
    * Called when user is registered to received calls.
