@@ -170,7 +170,7 @@ export class SimpleUser {
 
         // Delegate
         if (this.delegate && this.delegate.onCallReceived) {
-          this.delegate.onCallReceived();
+          this.delegate.onCallReceived(invitation);
         } else {
           this.logger.warn(`[${this.id}] No handler available, rejecting INVITE...`);
           invitation
@@ -376,7 +376,7 @@ export class SimpleUser {
     destination: string,
     inviterOptions?: InviterOptions,
     inviterInviteOptions?: InviterInviteOptions
-  ): Promise<void> {
+  ): Promise<Inviter> {
     this.logger.log(`[${this.id}] Beginning Session...`);
 
     if (this.session) {
@@ -404,8 +404,25 @@ export class SimpleUser {
 
     // Send INVITE
     return this.sendInvite(inviter, inviterOptions, inviterInviteOptions).then(() => {
-      return;
+      return inviter;
     });
+  }
+
+  /**
+   * transfer.
+   * @remarks
+   * Send an INVITE request to create a new Session.
+   * Resolves when the INVITE request is sent, otherwise rejects.
+   * Use `onCallAnswered` delegate method to determine if Session is established.
+   * @param destination - The target destination to call. A SIP address to send the INVITE to.
+   * @param inviterOptions - Optional options for Inviter constructor.
+   * @param inviterInviteOptions - Optional options for Inviter.invite().
+   */
+  public transfer(destination: string,
+    inviterOptions?: InviterOptions,
+    inviterInviteOptions?: InviterInviteOptions
+  ) {
+      return this.session?.refer(UserAgent.makeURI(destination) as any);
   }
 
   /**
@@ -733,7 +750,7 @@ export class SimpleUser {
 
     // Call session created callback
     if (this.delegate && this.delegate.onCallCreated) {
-      this.delegate.onCallCreated();
+      this.delegate.onCallCreated(session);
     }
 
     // Setup session state change handler
@@ -760,7 +777,7 @@ export class SimpleUser {
           this.session = undefined;
           this.cleanupMedia();
           if (this.delegate && this.delegate.onCallHangup) {
-            this.delegate.onCallHangup();
+            this.delegate.onCallHangup(session);
           }
           break;
         default:
@@ -839,7 +856,7 @@ export class SimpleUser {
               if (!tone || !duration) {
                 throw new Error("Tone or duration undefined.");
               }
-              this.delegate.onCallDTMFReceived(tone, duration);
+              this.delegate.onCallDTMFReceived(tone, duration, session);
             }
           })
           .catch((error: Error) => {
@@ -880,6 +897,7 @@ export class SimpleUser {
     if (!this.session) {
       return Promise.reject(new Error("Session does not exist."));
     }
+    const session = this.session;
 
     // Just resolve if we are already in correct state
     if (this.held === hold) {
@@ -902,19 +920,37 @@ export class SimpleUser {
         onReject: (): void => {
           this.logger.warn(`[${this.id}] re-invite request was rejected`);
           if (this.delegate && this.delegate.onCallHold) {
-            this.delegate.onCallHold(this.held);
+            this.delegate.onCallHold(this.held, session);
           }
         }
       }
     };
 
-    // Use hold modifier to produce the appropriate SDP offer to place call on hold
-    options.sessionDescriptionHandlerModifiers = hold ? [holdModifier] : [];
+    // Session properties used to pass modifiers to the SessionDescriptionHandler:
+    //
+    // 1) Session.sessionDescriptionHandlerModifiers
+    //    - used in all cases when handling the initial INVITE transaction as either UAC or UAS
+    //    - may be set directly at anytime
+    //    - may optionally be set via constructor option
+    //    - may optionally be set via options passed to Inviter.invite() or Invitation.accept()
+    //
+    // 2) Session.sessionDescriptionHandlerModifiersReInvite
+    //    - used in all cases when handling a re-INVITE transaction as either UAC or UAS
+    //    - may be set directly at anytime
+    //    - may optionally be set via constructor option
+    //    - may optionally be set via options passed to Session.invite()
+
+    // Set the session's SDH re-INVITE modifiers to produce the appropriate SDP offer to place call on hold
+    session.sessionDescriptionHandlerModifiersReInvite = hold ? [holdModifier] : [];
 
     // Send re-INVITE
     return this.session
       .invite(options)
       .then(() => {
+        // Reset the session's SDH re-INVITE modifiers.
+        // Note that if the modifiers are not reset, they will be applied
+        // to the SDP answer as well (which we do not want in this case).
+        session.sessionDescriptionHandlerModifiersReInvite = [];
         this.enableSenderTracks(!hold); // mute/unmute
       })
       .catch((error: Error) => {

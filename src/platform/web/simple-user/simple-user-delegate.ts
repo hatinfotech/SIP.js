@@ -1,3 +1,5 @@
+import { Invitation, Session } from "../../..";
+
 /**
  * Delegate for {@link SimpleUser}.
  * @public
@@ -15,7 +17,7 @@ export interface SimpleUserDelegate {
    * @remarks
    * Callback for handling the creation of a new Session.
    */
-  onCallCreated?(): void;
+  onCallCreated?(session?: Session): void;
 
   /**
    * Called when a call is received.
@@ -23,28 +25,28 @@ export interface SimpleUserDelegate {
    * Callback for handling incoming INVITE requests.
    * The callback must either accept or reject the incoming call by calling `answer()` or `decline()` respectively.
    */
-  onCallReceived?(): void;
+  onCallReceived?(invitation?: Invitation): void;
 
   /**
    * Called when a call is hung up.
    * @remarks
    * Callback for handling termination of a Session.
    */
-  onCallHangup?(): void;
+  onCallHangup?(session?: Session): void;
 
   /**
    * Called when a call is put on hold or taken off hold.
    * @remarks
    * Callback for handling re-INVITE responses.
    */
-  onCallHold?(held: boolean): void;
+  onCallHold?(held: boolean, session?: Session): void;
 
   /**
    * Called when a call receives an incoming DTMF tone.
    * @remarks
    * Callback for handling an incoming INFO request with content type application/dtmf-relay.
    */
-  onCallDTMFReceived?(tone: string, duration: number): void;
+  onCallDTMFReceived?(tone: string, duration: number, session?: Session): void;
 
   /**
    * Called upon receiving a message.
